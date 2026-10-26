@@ -1,0 +1,250 @@
+#include "mlms/domain/role.hpp"
+#include "mlms/domain/user_record.hpp"
+#include "mlms/persistence/schema_initializer.hpp"
+#include "mlms/persistence/sqlite_connection.hpp"
+#include "mlms/persistence/user_repository.hpp"
+#include "mlms/security/sodium_password_hasher.hpp"
+#include "mlms/services/authentication_service.hpp"
+
+#include <exception>
+#include <iostream>
+#include <stdexcept>
+#include <string>
+
+#include <termios.h>
+#include <unistd.h>
+
+namespace {
+
+std::string readPassword(const std::string& prompt) {
+    std::cout << prompt << std::flush;
+
+    termios originalSettings{};
+
+    // Fall back to ordinary input if terminal echo cannot be controlled.
+    if (tcgetattr(STDIN_FILENO, &originalSettings) != 0) {
+        std::string password;
+        std::getline(std::cin, password);
+        return password;
+    }
+
+    termios hiddenSettings = originalSettings;
+    hiddenSettings.c_lflag &= ~ECHO;
+
+    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &hiddenSettings) != 0) {
+        std::string password;
+        std::getline(std::cin, password);
+        return password;
+    }
+
+    std::string password;
+    const bool inputSucceeded =
+        static_cast<bool>(std::getline(std::cin, password));
+
+    // Always restore terminal echo after reading the password.
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &originalSettings);
+    std::cout << '\n';
+
+    if (!inputSucceeded) {
+        throw std::runtime_error("Password input was interrupted.");
+    }
+
+    return password;
+}
+
+std::string readRequired(const std::string& prompt) {
+    while (true) {
+        std::cout << prompt;
+
+        std::string value;
+        if (!std::getline(std::cin, value)) {
+            throw std::runtime_error("Input was interrupted.");
+        }
+
+        if (!value.empty()) {
+            return value;
+        }
+
+        std::cout << "This field cannot be empty.\n";
+    }
+}
+
+void createFirstAdministrator(
+    mlms::UserRepository& users,
+    const mlms::SodiumPasswordHasher& hasher
+) {
+    std::cout
+        << "\nNo users exist in the database.\n"
+        << "Create the first administrator account.\n"
+        << "This setup is available only while the user table is empty.\n\n";
+
+    mlms::UserRecord admin;
+    admin.username = readRequired("Administrator username: ");
+    admin.fullName = readRequired("Full name: ");
+    admin.email = readRequired("Email address: ");
+
+    while (true) {
+        const std::string password =
+            readPassword("Create password (minimum 12 characters): ");
+
+        if (password.size() < 12) {
+            std::cout << "Password must contain at least 12 characters.\n";
+            continue;
+        }
+
+        const std::string confirmation =
+            readPassword("Confirm password: ");
+
+        if (password != confirmation) {
+            std::cout << "Passwords do not match. Try again.\n";
+            continue;
+        }
+
+        admin.passwordHash = hasher.hashPassword(password);
+        break;
+    }
+
+    admin.role = mlms::Role::Administrator;
+    users.create(admin);
+
+    std::cout
+        << "\nAdministrator account created successfully.\n"
+        << "You can now log in.\n\n";
+}
+
+void showRoleMenu(const mlms::AuthenticatedUser& user) {
+    bool loggedIn = true;
+
+    while (loggedIn) {
+        std::cout << "\n====================================\n"
+                  << "MLMS - " << mlms::toString(user.role)
+                  << " Dashboard\n"
+                  << "Welcome, " << user.fullName << '\n'
+                  << "Username: " << user.username << '\n'
+                  << "====================================\n";
+
+        switch (user.role) {
+            case mlms::Role::Student:
+                std::cout
+                    << "1. My courses\n"
+                    << "2. Submit an assignment\n"
+                    << "3. View released marks\n";
+                break;
+
+            case mlms::Role::Lecturer:
+                std::cout
+                    << "1. Manage assignments\n"
+                    << "2. Review submissions\n"
+                    << "3. Mark submissions\n";
+                break;
+
+            case mlms::Role::HoD:
+                std::cout
+                    << "1. Department overview\n"
+                    << "2. Review marks for moderation\n";
+                break;
+
+            case mlms::Role::Administrator:
+                std::cout
+                    << "1. Manage users\n"
+                    << "2. Manage departments\n"
+                    << "3. Manage courses\n";
+                break;
+        }
+
+        std::cout << "0. Logout\n"
+                  << "Select an option: ";
+
+        std::string choice;
+        if (!std::getline(std::cin, choice)) {
+            loggedIn = false;
+            continue;
+        }
+
+        if (choice == "0") {
+            loggedIn = false;
+            std::cout << "You have been logged out.\n";
+        } else {
+            std::cout
+                << "This menu feature will be implemented in a later stage.\n";
+        }
+    }
+}
+
+void runApplication() {
+    // Run this application from the MLMS project root directory.
+    mlms::SqliteConnection connection("mlms.db");
+
+    mlms::SchemaInitializer::initialize(
+        connection,
+        "database/schema.sql"
+    );
+
+    mlms::UserRepository users(connection);
+    mlms::SodiumPasswordHasher hasher;
+
+    // Bootstrap an administrator only when the database has no users.
+    if (users.listAll().empty()) {
+        createFirstAdministrator(users, hasher);
+    }
+
+    mlms::AuthenticationService authentication(users, hasher);
+
+    bool running = true;
+
+    while (running) {
+        std::cout
+            << "\n====================================\n"
+            << "MLMS - Moderated Learning Management System\n"
+            << "====================================\n"
+            << "1. Login\n"
+            << "0. Exit\n"
+            << "Select an option: ";
+
+        std::string choice;
+        if (!std::getline(std::cin, choice)) {
+            break;
+        }
+
+        if (choice == "0") {
+            running = false;
+            continue;
+        }
+
+        if (choice != "1") {
+            std::cout << "Invalid option. Try again.\n";
+            continue;
+        }
+
+        const std::string username =
+            readRequired("Username: ");
+        const std::string password =
+            readPassword("Password: ");
+
+        const auto user =
+            authentication.authenticate(username, password);
+
+        if (!user.has_value()) {
+            std::cout
+                << "Login failed. Check your credentials or account status.\n";
+            continue;
+        }
+
+        std::cout << "\nLogin successful.\n";
+        showRoleMenu(*user);
+    }
+
+    std::cout << "MLMS closed.\n";
+}
+
+} // namespace
+
+int main() {
+    try {
+        runApplication();
+        return 0;
+    } catch (const std::exception& error) {
+        std::cerr << "MLMS error: " << error.what() << '\n';
+        return 1;
+    }
+}

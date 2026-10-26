@@ -1,0 +1,1 @@
+/usr/bin/c++ -Wl,--dependency-file=CMakeFiles/mlms_tests.dir/link.d CMakeFiles/mlms_tests.dir/tests/test_main.cpp.o -o mlms_tests  libmlms_core.a /usr/lib/x86_64-linux-gnu/libsqlite3.so /usr/lib/x86_64-linux-gnu/libsodium.so

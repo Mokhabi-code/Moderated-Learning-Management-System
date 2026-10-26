@@ -1,0 +1,6 @@
+/mnt/c/Users/Manager/Downloads/MLMS_starter/MLMS/build/CMakeFiles/mlms_core.dir
+/mnt/c/Users/Manager/Downloads/MLMS_starter/MLMS/build/CMakeFiles/mlms_app.dir
+/mnt/c/Users/Manager/Downloads/MLMS_starter/MLMS/build/CMakeFiles/mlms_tests.dir
+/mnt/c/Users/Manager/Downloads/MLMS_starter/MLMS/build/CMakeFiles/test.dir
+/mnt/c/Users/Manager/Downloads/MLMS_starter/MLMS/build/CMakeFiles/edit_cache.dir
+/mnt/c/Users/Manager/Downloads/MLMS_starter/MLMS/build/CMakeFiles/rebuild_cache.dir

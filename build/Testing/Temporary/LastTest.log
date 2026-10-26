@@ -1,0 +1,19 @@
+Start testing: Oct 26 21:40 SAST
+----------------------------------------------------------
+1/1 Testing: mlms_tests
+1/1 Test: mlms_tests
+Command: "/mnt/c/Users/Manager/Downloads/MLMS_starter/MLMS/build/mlms_tests"
+Directory: /mnt/c/Users/Manager/Downloads/MLMS_starter/MLMS/build
+"mlms_tests" start time: Oct 26 21:40 SAST
+Output:
+----------------------------------------------------------
+All MLMS tests passed.
+<end of output>
+Test time =   0.56 sec
+----------------------------------------------------------
+Test Passed.
+"mlms_tests" end time: Oct 26 21:40 SAST
+"mlms_tests" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Oct 26 21:40 SAST
